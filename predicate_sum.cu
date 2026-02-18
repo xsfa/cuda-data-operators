@@ -47,8 +47,9 @@ __global__ void predicate_sum_kernel(
 
 /**
  * Host wrapper for predicate sum.
+ * extern "C" enables calling from Python via ctypes.
  */
-long long predicate_sum(
+extern "C" long long predicate_sum(
     const int* d_values,
     const int* d_region_ids,
     int target_region,

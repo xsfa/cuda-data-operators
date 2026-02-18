@@ -1,0 +1,17 @@
+# Build artifacts
+*.o
+*.obj
+*.exe
+predicate_sum
+
+# CUDA compiled
+*.cubin
+*.ptx
+*.fatbin
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

@@ -8,7 +8,6 @@ GPU-native data operators for SQL-like operations directly on GPU memory.
 # 1. Clone and setup
 !git clone https://github.com/xsfa/cuda-data-operators.git
 %cd cuda-data-operators
-!git checkout tesfashenkute/feat-bench-cudf-comparison
 
 # 2. Install dependencies
 !pip install --quiet cupy-cuda12x

@@ -135,65 +135,11 @@ double agg_sum_float64(const double* input, int n) {
 
 uint64_t agg_count(int n) {
     Column col{nullptr, static_cast<size_t>(n), DataType::INT32, nullptr, nullptr};
-    uint64_t* d_result;
-    cudaMalloc(&d_result, sizeof(uint64_t));
-    uint64_t result = count_column(col, d_result);
-    cudaFree(d_result);
-    return result;
-}
-
-// --- Predicate Sum (combined filter + aggregate) ---
-
-int64_t predicate_sum_int32(
-    const int32_t* values,
-    const int32_t* predicates,
-    int32_t predicate_value,
-    int n
-) {
-    // Allocate temp storage
     unsigned long long* d_result;
     cudaMalloc(&d_result, sizeof(unsigned long long));
-    cudaMemset(d_result, 0, sizeof(unsigned long long));
-
-    // Use the existing kernel pattern
-    constexpr int BLOCK_SIZE = 256;
-    int num_blocks = min((n + BLOCK_SIZE - 1) / BLOCK_SIZE, 256);
-
-    // Inline kernel for predicate sum
-    auto kernel = [] __device__ (
-        const int32_t* values,
-        const int32_t* predicates,
-        int32_t pred_val,
-        int n,
-        unsigned long long* result
-    ) {
-        __shared__ unsigned long long sdata[256];
-        int tid = threadIdx.x;
-        int gid = blockIdx.x * blockDim.x + threadIdx.x;
-        int stride = blockDim.x * gridDim.x;
-
-        unsigned long long thread_sum = 0;
-        for (int i = gid; i < n; i += stride) {
-            if (predicates[i] == pred_val) {
-                thread_sum += values[i];
-            }
-        }
-        sdata[tid] = thread_sum;
-        __syncthreads();
-
-        for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-            if (tid < s) sdata[tid] += sdata[tid + s];
-            __syncthreads();
-        }
-        if (tid == 0) atomicAdd(result, sdata[0]);
-    };
-
-    // Can't use lambda in kernel launch, use separate kernel
-    // For now, just do CPU fallback or use the existing predicate_sum.cu
-    // This is a placeholder - real impl would call the kernel
-
+    unsigned long long result = count_column(col, d_result);
     cudaFree(d_result);
-    return 0;  // TODO: implement properly
+    return result;
 }
 
 }  // extern "C"

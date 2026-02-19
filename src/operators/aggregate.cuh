@@ -80,16 +80,16 @@ AccT sum_column(const Column& col, AccT* d_result) {
 
 __global__ void count_non_null_kernel(
     const uint8_t* __restrict__ validity,
-    uint64_t* __restrict__ block_results,
+    unsigned long long* __restrict__ block_results,
     int n
 ) {
-    __shared__ uint64_t sdata[AGG_BLOCK_SIZE];
+    __shared__ unsigned long long sdata[AGG_BLOCK_SIZE];
 
     int tid = threadIdx.x;
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
-    uint64_t thread_count = 0;
+    unsigned long long thread_count = 0;
     for (int i = gid; i < n; i += stride) {
         if (!validity) {
             thread_count++;  // No validity mask = all valid
@@ -113,16 +113,16 @@ __global__ void count_non_null_kernel(
     }
 }
 
-inline uint64_t count_column(const Column& col, uint64_t* d_result) {
+inline unsigned long long count_column(const Column& col, unsigned long long* d_result) {
     int n = col.length;
     int num_blocks = min((n + AGG_BLOCK_SIZE - 1) / AGG_BLOCK_SIZE, 256);
 
-    cudaMemset(d_result, 0, sizeof(uint64_t));
+    cudaMemset(d_result, 0, sizeof(unsigned long long));
     count_non_null_kernel<<<num_blocks, AGG_BLOCK_SIZE>>>(col.validity, d_result, n);
     cudaDeviceSynchronize();
 
-    uint64_t result;
-    cudaMemcpy(&result, d_result, sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    unsigned long long result;
+    cudaMemcpy(&result, d_result, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
     return result;
 }
 

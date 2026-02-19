@@ -33,8 +33,7 @@ def find_nvcc() -> str:
             return path
 
     result = subprocess.run(
-        ["find", "/usr", "-name", "nvcc", "-type", "f"],
-        capture_output=True, text=True
+        ["find", "/usr", "-name", "nvcc", "-type", "f"], capture_output=True, text=True
     )
     if result.stdout.strip():
         return result.stdout.strip().split("\n")[0]
@@ -59,10 +58,12 @@ def setup():
         nvcc,
         "-O3",
         "-arch=sm_75",
-        "-Xcompiler", "-fPIC",
+        "-Xcompiler",
+        "-fPIC",
         "-shared",
         "src/lib.cu",
-        "-o", "libdataops.so",
+        "-o",
+        "libdataops.so",
     ]
 
     print(f"Running: {' '.join(cmd)}")
@@ -96,13 +97,22 @@ def load_lib():
 
     # Prefix scan
     lib.prefix_scan_exclusive_uint32.argtypes = [
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
     ]
 
     # Filter
     lib.filter_int32.argtypes = [
-        ctypes.c_void_p, ctypes.c_int, ctypes.c_int32, ctypes.c_int,
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int32,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
     ]
     lib.filter_int32.restype = ctypes.c_uint32
 
@@ -123,6 +133,7 @@ def load_lib():
 
 try:
     import cupy as cp
+
     HAS_CUPY = True
 except ImportError:
     HAS_CUPY = False
@@ -206,14 +217,20 @@ def test_filter():
 
     # op=4 is GT
     count = lib.filter_int32(
-        d_input.data.ptr, n, 50, 4,
-        d_output.data.ptr, d_mask.data.ptr, d_scan.data.ptr, d_temp.data.ptr
+        d_input.data.ptr,
+        n,
+        50,
+        4,
+        d_output.data.ptr,
+        d_mask.data.ptr,
+        d_scan.data.ptr,
+        d_temp.data.ptr,
     )
 
     result = cp.asnumpy(d_output[:count])
     assert np.array_equal(result, expected), f"Got {result}"
     print(f"  Input:  {input_data}")
-    print(f"  Filter: > 50")
+    print("  Filter: > 50")
     print(f"  Output: {result}")
     print("  PASSED")
 
@@ -237,8 +254,14 @@ def test_filter_large():
     d_temp = cp.zeros(1024, dtype=cp.uint32)
 
     count = lib.filter_int32(
-        d_input.data.ptr, n, 50, 4,
-        d_output.data.ptr, d_mask.data.ptr, d_scan.data.ptr, d_temp.data.ptr
+        d_input.data.ptr,
+        n,
+        50,
+        4,
+        d_output.data.ptr,
+        d_mask.data.ptr,
+        d_scan.data.ptr,
+        d_temp.data.ptr,
     )
 
     result = cp.asnumpy(d_output[:count])
@@ -338,7 +361,7 @@ def main():
             fn()
             passed += 1
         except Exception as e:
-            print(f"  FAILED: {e}")
+            print(f"  FAILED ({name}): {e}")
             failed += 1
 
     print(f"\n{'=' * 60}")

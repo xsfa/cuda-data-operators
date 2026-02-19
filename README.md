@@ -5,19 +5,22 @@ GPU-native data operators for SQL-like operations directly on GPU memory.
 ## Quick Start (Google Colab)
 
 ```python
-# 1. Clone and setup
 !git clone https://github.com/xsfa/cuda-data-operators.git
 %cd cuda-data-operators
-
-# 2. Install dependencies
 !pip install --quiet cupy-cuda12x
-
-# 3. Compile and test
 !python test_runner.py --setup
 !python test_runner.py
 ```
 
 **Requirements**: GPU runtime (Runtime → Change runtime type → T4 GPU)
+
+## Local Development (with uv)
+
+```bash
+uv pip install -e ".[gpu]"
+uv run python test_runner.py --setup
+uv run python test_runner.py
+```
 
 ## Operators
 
@@ -47,20 +50,14 @@ src/
 ## Running Individual Tests
 
 ```bash
-# List tests
-!python test_runner.py --list
-
-# Run specific test
-!python test_runner.py --test filter
-!python test_runner.py --test sum_large
+python test_runner.py --list
+python test_runner.py --test filter
+python test_runner.py --test sum_large
 ```
 
 ## Benchmarking vs cuDF
 
 ```bash
-!bash colab_setup.sh
-!python benchmark.py
+bash colab_setup.sh
+python benchmark.py
 ```
-
-
-The goal: execute analytical queries without CPU round-trips, keeping data in HBM alongside model weights.

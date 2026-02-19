@@ -14,8 +14,8 @@ import ctypes
 import time
 from pathlib import Path
 
-import cupy as cp
 import cudf
+import cupy as cp
 import numpy as np
 
 
@@ -30,7 +30,9 @@ def load_cuda_kernel() -> ctypes.CDLL:
     return ctypes.CDLL(str(lib_path))
 
 
-def benchmark_cudf(values: np.ndarray, region_ids: np.ndarray, target: int, warmup: int = 3, runs: int = 10) -> tuple[int, float]:
+def benchmark_cudf(
+    values: np.ndarray, region_ids: np.ndarray, target: int, warmup: int = 3, runs: int = 10
+) -> tuple[int, float]:
     """Benchmark cuDF predicate sum."""
     df = cudf.DataFrame({"values": values, "region_id": region_ids})
 
@@ -48,15 +50,17 @@ def benchmark_cudf(values: np.ndarray, region_ids: np.ndarray, target: int, warm
     return int(result), elapsed
 
 
-def benchmark_raw_cuda(values: np.ndarray, region_ids: np.ndarray, target: int, warmup: int = 3, runs: int = 10) -> tuple[int, float]:
+def benchmark_raw_cuda(
+    values: np.ndarray, region_ids: np.ndarray, target: int, warmup: int = 3, runs: int = 10
+) -> tuple[int, float]:
     """Benchmark raw CUDA kernel via ctypes."""
     lib = load_cuda_kernel()
 
     lib.predicate_sum.argtypes = [
         ctypes.c_void_p,  # d_values
         ctypes.c_void_p,  # d_region_ids
-        ctypes.c_int,     # target_region
-        ctypes.c_int,     # n
+        ctypes.c_int,  # target_region
+        ctypes.c_int,  # n
     ]
     lib.predicate_sum.restype = ctypes.c_longlong
 
@@ -67,16 +71,12 @@ def benchmark_raw_cuda(values: np.ndarray, region_ids: np.ndarray, target: int, 
 
     # Warmup
     for _ in range(warmup):
-        _ = lib.predicate_sum(
-            d_values.data.ptr, d_region_ids.data.ptr, target, n
-        )
+        _ = lib.predicate_sum(d_values.data.ptr, d_region_ids.data.ptr, target, n)
 
     cp.cuda.Stream.null.synchronize()
     start = time.perf_counter()
     for _ in range(runs):
-        result = lib.predicate_sum(
-            d_values.data.ptr, d_region_ids.data.ptr, target, n
-        )
+        result = lib.predicate_sum(d_values.data.ptr, d_region_ids.data.ptr, target, n)
     cp.cuda.Stream.null.synchronize()
     elapsed = (time.perf_counter() - start) / runs
 
@@ -112,9 +112,9 @@ def main():
             match = "N/A"
             cuda_result = None
 
-        cudf_match = "yes" if cudf_result == expected else "NO"
-
-        print(f"{n:>12,} | {cudf_time*1000:>10.3f} | {cuda_ms:>10.3f} | {speedup:>7.2f}x | {match}")
+        print(
+            f"{n:>12,} | {cudf_time * 1000:>10.3f} | {cuda_ms:>10.3f} | {speedup:>7.2f}x | {match}"
+        )
 
     print("\nNote: Speedup > 1 means raw CUDA is faster than cuDF.")
 

@@ -1,0 +1,34 @@
+[project]
+name = "cuda-data-operators"
+version = "0.1.0"
+description = "GPU-native data operators for SQL-like operations"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "cupy-cuda12x>=12.0.0",
+]
+bench = [
+    "cupy-cuda12x>=12.0.0",
+    "cudf-cu12>=24.0.0",
+]
+dev = [
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+test-ops = "test_runner:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # line length handled separately
+
+[tool.ruff.lint.isort]
+known-first-party = ["cuda_data_operators"]

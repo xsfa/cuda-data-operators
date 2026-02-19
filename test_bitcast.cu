@@ -3,10 +3,27 @@
 #include <cstdio>
 #include <bit>
 
+// Option 1: with --expt-relaxed-constexpr flag
+// __device__ inline void atomicAddInt64(int64_t* addr, int64_t val) {
+//     atomicAdd(
+//         reinterpret_cast<unsigned long long*>(addr),
+//         std::bit_cast<unsigned long long>(val)
+//     );
+// }
+
+// Option 2: manual bit_cast for device code (no flag needed)
+template<typename To, typename From>
+__device__ __host__ inline To device_bit_cast(From val) {
+    static_assert(sizeof(To) == sizeof(From), "Size mismatch");
+    To result;
+    memcpy(&result, &val, sizeof(To));
+    return result;
+}
+
 __device__ inline void atomicAddInt64(int64_t* addr, int64_t val) {
     atomicAdd(
         reinterpret_cast<unsigned long long*>(addr),
-        std::bit_cast<unsigned long long>(val)
+        device_bit_cast<unsigned long long>(val)
     );
 }
 

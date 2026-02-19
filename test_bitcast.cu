@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 #include <cstdint>
+#include <cstdio>
 #include <bit>
 
 __device__ inline void atomicAddInt64(int64_t* addr, int64_t val) {

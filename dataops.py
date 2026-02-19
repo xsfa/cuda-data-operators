@@ -19,9 +19,9 @@ class DataOps:
     def __init__(self, lib_path: str = "./libdataops.so"):
         path = Path(lib_path)
         if not path.exists():
-            raise FileNotFoundError(
-                f"{lib_path} not found. Run: python test_runner.py --setup"
-            )
+            raise FileNotFoundError(f"{lib_path} not found. Run: python test_runner.py --setup")
+
+        print(f"Loading library from {str(path)}")
 
         self._lib = ctypes.CDLL(str(path))
         self._setup_signatures()

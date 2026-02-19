@@ -5,23 +5,21 @@ Test runner for GPU data operators.
 Usage in Colab:
     !git clone https://github.com/xsfa/cuda-data-operators.git
     %cd cuda-data-operators
-    !git checkout tesfashenkute/feat-bench-cudf-comparison
     !python test_runner.py --setup
     !python test_runner.py
 """
 
 import argparse
-import ctypes
 import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
 
-lib = None
+ops = None
 
 
-def find_nvcc() -> str:
+def find_nvcc() -> str | None:
     """Find nvcc compiler."""
     candidates = [
         "/usr/local/cuda/bin/nvcc",
@@ -78,59 +76,13 @@ def setup():
     print("=" * 60)
 
 
-def load_lib():
-    """Load the compiled shared library."""
-    global lib
-    if not Path("libdataops.so").exists():
-        print("Library not found. Run: python test_runner.py --setup")
-        sys.exit(1)
+def load_ops():
+    """Load the DataOps wrapper."""
+    global ops
+    from dataops import DataOps
 
-    lib = ctypes.CDLL("./libdataops.so")
-
-    # Memory pool
-    lib.pool_create.argtypes = [ctypes.c_size_t]
-    lib.pool_create.restype = ctypes.c_void_p
-    lib.pool_destroy.argtypes = [ctypes.c_void_p]
-    lib.pool_reset.argtypes = [ctypes.c_void_p]
-    lib.pool_used.argtypes = [ctypes.c_void_p]
-    lib.pool_used.restype = ctypes.c_size_t
-
-    # Prefix scan
-    lib.prefix_scan_temp_size.argtypes = [ctypes.c_int]
-    lib.prefix_scan_temp_size.restype = ctypes.c_size_t
-
-    lib.prefix_scan_num_levels.argtypes = [ctypes.c_int]
-    lib.prefix_scan_num_levels.restype = ctypes.c_int
-
-    lib.prefix_scan_exclusive_uint32.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_int,
-        ctypes.c_void_p,
-    ]
-
-    # Filter
-    lib.filter_int32.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_int,
-        ctypes.c_int32,
-        ctypes.c_int,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-    ]
-    lib.filter_int32.restype = ctypes.c_uint32
-
-    # Aggregates
-    lib.agg_sum_int32.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    lib.agg_sum_int32.restype = ctypes.c_int64
-    lib.agg_sum_float64.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    lib.agg_sum_float64.restype = ctypes.c_double
-    lib.agg_count.argtypes = [ctypes.c_int]
-    lib.agg_count.restype = ctypes.c_uint64
-
-    return lib
+    ops = DataOps()
+    return ops
 
 
 # =============================================================================
@@ -149,13 +101,13 @@ def test_memory_pool():
     """Test memory pool allocation."""
     print("\n[TEST] Memory Pool")
 
-    pool = lib.pool_create(1024 * 1024)
+    pool = ops.pool_create(1024 * 1024)
     assert pool, "Failed to create pool"
 
-    lib.pool_reset(pool)
-    assert lib.pool_used(pool) == 0
+    ops.pool_reset(pool)
+    assert ops.pool_used(pool) == 0
 
-    lib.pool_destroy(pool)
+    ops.pool_destroy(pool)
     print("  PASSED")
 
 
@@ -169,13 +121,12 @@ def test_prefix_scan():
     input_data = np.array([3, 1, 7, 0, 4, 1, 6, 3], dtype=np.uint32)
     expected = np.array([0, 3, 4, 11, 11, 15, 16, 22], dtype=np.uint32)
 
+    n = len(input_data)
     d_input = cp.asarray(input_data)
     d_output = cp.zeros_like(d_input)
-    d_temp = cp.zeros(256, dtype=cp.uint32)
+    d_temp = cp.zeros(ops.scan_temp_size(n), dtype=cp.uint32)
 
-    lib.prefix_scan_exclusive_uint32(
-        d_input.data.ptr, d_output.data.ptr, len(input_data), d_temp.data.ptr
-    )
+    ops.prefix_scan(d_input.data.ptr, d_output.data.ptr, n, d_temp.data.ptr)
 
     result = cp.asnumpy(d_output)
     assert np.array_equal(result, expected), f"Got {result}"
@@ -194,9 +145,9 @@ def test_prefix_scan_large():
     n = 10_000
     d_input = cp.ones(n, dtype=cp.uint32)
     d_output = cp.zeros(n, dtype=cp.uint32)
-    d_temp = cp.zeros(256, dtype=cp.uint32)
+    d_temp = cp.zeros(ops.scan_temp_size(n), dtype=cp.uint32)
 
-    lib.prefix_scan_exclusive_uint32(d_input.data.ptr, d_output.data.ptr, n, d_temp.data.ptr)
+    ops.prefix_scan(d_input.data.ptr, d_output.data.ptr, n, d_temp.data.ptr)
 
     result = cp.asnumpy(d_output)
     expected = np.arange(n, dtype=np.uint32)
@@ -211,6 +162,8 @@ def test_filter():
         print("  SKIPPED (no CuPy)")
         return
 
+    from dataops import CompareOp
+
     input_data = np.array([10, 80, 30, 90, 50, 70, 20, 60], dtype=np.int32)
     expected = np.array([80, 90, 70, 60], dtype=np.int32)
 
@@ -219,14 +172,13 @@ def test_filter():
     d_output = cp.zeros(n, dtype=cp.int32)
     d_mask = cp.zeros(n, dtype=cp.uint32)
     d_scan = cp.zeros(n, dtype=cp.uint32)
-    d_temp = cp.zeros(256, dtype=cp.uint32)
+    d_temp = cp.zeros(ops.scan_temp_size(n), dtype=cp.uint32)
 
-    # op=4 is GT
-    count = lib.filter_int32(
+    count = ops.filter_int32(
         d_input.data.ptr,
         n,
         50,
-        4,
+        CompareOp.GT,
         d_output.data.ptr,
         d_mask.data.ptr,
         d_scan.data.ptr,
@@ -248,6 +200,8 @@ def test_filter_large():
         print("  SKIPPED (no CuPy)")
         return
 
+    from dataops import CompareOp
+
     n = 1_000_000
     np.random.seed(42)
     input_data = np.random.randint(0, 100, n, dtype=np.int32)
@@ -257,14 +211,13 @@ def test_filter_large():
     d_output = cp.zeros(n, dtype=cp.int32)
     d_mask = cp.zeros(n, dtype=cp.uint32)
     d_scan = cp.zeros(n, dtype=cp.uint32)
-    temp_size = lib.prefix_scan_temp_size(n)
-    d_temp = cp.zeros(temp_size, dtype=cp.uint32)
+    d_temp = cp.zeros(ops.scan_temp_size(n), dtype=cp.uint32)
 
-    count = lib.filter_int32(
+    count = ops.filter_int32(
         d_input.data.ptr,
         n,
         50,
-        4,
+        CompareOp.GT,
         d_output.data.ptr,
         d_mask.data.ptr,
         d_scan.data.ptr,
@@ -272,8 +225,8 @@ def test_filter_large():
     )
 
     result = cp.asnumpy(d_output[:count])
-    assert len(result) == len(expected)
-    assert np.array_equal(result, expected)
+    assert len(result) == len(expected), f"Size mismatch: {len(result)} vs {len(expected)}"
+    assert np.array_equal(result, expected), "Content mismatch"
     print(f"  {n:,} → {count:,} rows: PASSED")
 
 
@@ -284,10 +237,10 @@ def test_sum():
         print("  SKIPPED (no CuPy)")
         return
 
-    data = np.arange(1, 11, dtype=np.int32)  # 1..10
+    data = np.arange(1, 11, dtype=np.int32)
     d_data = cp.asarray(data)
 
-    result = lib.agg_sum_int32(d_data.data.ptr, len(data))
+    result = ops.sum_int32(d_data.data.ptr, len(data))
     assert result == 55, f"Got {result}"
     print(f"  sum(1..10) = {result}: PASSED")
 
@@ -302,7 +255,7 @@ def test_sum_large():
     n = 10_000_000
     d_data = cp.ones(n, dtype=cp.int32)
 
-    result = lib.agg_sum_int32(d_data.data.ptr, n)
+    result = ops.sum_int32(d_data.data.ptr, n)
     assert result == n, f"Got {result}"
     print(f"  sum(10M ones) = {result:,}: PASSED")
 
@@ -311,8 +264,8 @@ def test_count():
     """Test COUNT aggregation."""
     print("\n[TEST] COUNT")
 
-    assert lib.agg_count(1000) == 1000
-    assert lib.agg_count(10_000_000) == 10_000_000
+    assert ops.count(1000) == 1000
+    assert ops.count(10_000_000) == 10_000_000
     print("  PASSED")
 
 
@@ -348,7 +301,7 @@ def main():
         setup()
         return
 
-    load_lib()
+    load_ops()
 
     if args.test:
         for name, fn in ALL_TESTS:

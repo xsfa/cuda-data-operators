@@ -1,6 +1,6 @@
 # cuda-data-operators
 
-GPU-native data operators for SQL-like operations directly on GPU memory. Part of a larger architecture for embedding query execution inside LLM inference loops.
+GPU-native data operators for SQL-like operations directly on GPU memory.
 
 ## Quick Start (Google Colab)
 
@@ -63,16 +63,5 @@ src/
 !python benchmark.py
 ```
 
-## Architecture Context
-
-This is Layer 3 (GPU-Native Data Operator Layer) of a Schema-Aware MoE architecture:
-
-```
-L2 (Reasoning) → emits SQL AST
-       ↓
-L3 (This repo) → executes operators in GPU memory
-       ↓
-L4 (Projection) → embeds results back to transformer
-```
 
 The goal: execute analytical queries without CPU round-trips, keeping data in HBM alongside model weights.

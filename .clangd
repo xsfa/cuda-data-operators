@@ -1,0 +1,16 @@
+CompileFlags:
+  Add:
+    - "-x"
+    - "c++"
+    - "-std=c++17"
+    - "-D__CUDACC__"
+    - "-D__CUDA_ARCH__=750"
+    - "-include"
+    - "cuda_runtime.h"
+  Remove:
+    - "-forward-unknown-to-host-compiler"
+
+Diagnostics:
+  Suppress:
+    - "pp_file_not_found"  # cuda_runtime.h not found
+    - "*"  # Suppress all for CUDA files since we can't properly analyze

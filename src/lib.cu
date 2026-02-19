@@ -41,6 +41,14 @@ size_t pool_capacity(void* pool) {
 
 // --- Prefix Scan ---
 
+size_t prefix_scan_temp_size(int n) {
+    return scan_temp_size(n);
+}
+
+int prefix_scan_num_levels(int n) {
+    return scan_num_levels(n);
+}
+
 void prefix_scan_exclusive_uint32(
     const uint32_t* input,
     uint32_t* output,

@@ -131,15 +131,49 @@ __global__ void scan_phase3_kernel(
 }
 
 /**
+ * Compute exact temp storage needed for hierarchical scan.
+ */
+inline size_t scan_temp_size(int n) {
+    if (n <= 0) return 0;
+
+    size_t total = 0;
+    int blocks = (n + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
+
+    while (blocks > 1) {
+        total += blocks;
+        blocks = (blocks + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
+    }
+
+    return total + 1;  // +1 for final level
+}
+
+/**
+ * Compute number of levels needed for hierarchical scan.
+ */
+inline int scan_num_levels(int n) {
+    if (n <= SCAN_BLOCK_SIZE) return 1;
+
+    int levels = 1;
+    int blocks = (n + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
+
+    while (blocks > SCAN_BLOCK_SIZE) {
+        blocks = (blocks + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
+        levels++;
+    }
+
+    return levels + 1;  // +1 for the base level
+}
+
+/**
  * Host function: exclusive prefix sum on GPU array.
  * Supports arbitrary array sizes via iterative hierarchical scan.
  *
  * @param input  Device pointer to input array
  * @param output Device pointer to output array (can be same as input)
  * @param n      Number of elements
- * @param temp   Temporary storage (caller provides, size >= 2 * ceil(n/256))
+ * @param temp   Temporary storage (caller provides, size >= scan_temp_size(n))
  *
- * Max supported: 256^3 = 16M elements (3 levels). Extend levels[] for more.
+ * Max supported: 256^4 = 4B elements with MAX_LEVELS=4.
  */
 inline void exclusive_scan(
     const uint32_t* input,
@@ -150,6 +184,14 @@ inline void exclusive_scan(
     if (n == 0) return;
 
     constexpr int MAX_LEVELS = 4;  // Supports up to 256^4 = 4B elements
+
+    // Check that input doesn't exceed supported size
+    int required_levels = scan_num_levels(n);
+    if (required_levels > MAX_LEVELS) {
+        fprintf(stderr, "exclusive_scan: n=%d requires %d levels, max is %d\n",
+                n, required_levels, MAX_LEVELS);
+        return;
+    }
 
     int num_blocks = (n + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
 

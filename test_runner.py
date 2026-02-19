@@ -96,6 +96,12 @@ def load_lib():
     lib.pool_used.restype = ctypes.c_size_t
 
     # Prefix scan
+    lib.prefix_scan_temp_size.argtypes = [ctypes.c_int]
+    lib.prefix_scan_temp_size.restype = ctypes.c_size_t
+
+    lib.prefix_scan_num_levels.argtypes = [ctypes.c_int]
+    lib.prefix_scan_num_levels.restype = ctypes.c_int
+
     lib.prefix_scan_exclusive_uint32.argtypes = [
         ctypes.c_void_p,
         ctypes.c_void_p,
@@ -251,8 +257,7 @@ def test_filter_large():
     d_output = cp.zeros(n, dtype=cp.int32)
     d_mask = cp.zeros(n, dtype=cp.uint32)
     d_scan = cp.zeros(n, dtype=cp.uint32)
-    # Need ~2x ceil(n/256) for hierarchical scan temp storage
-    temp_size = 2 * ((n + 255) // 256) + 256
+    temp_size = lib.prefix_scan_temp_size(n)
     d_temp = cp.zeros(temp_size, dtype=cp.uint32)
 
     count = lib.filter_int32(

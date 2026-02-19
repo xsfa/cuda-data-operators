@@ -17,7 +17,7 @@ class DataOps:
     """Wrapper for libdataops.so CUDA operators."""
 
     def __init__(self, lib_path: str = "./libdataops.so"):
-        path = Path(lib_path)
+        path = Path(lib_path).resolve()
         if not path.exists():
             raise FileNotFoundError(f"{lib_path} not found. Run: python test_runner.py --setup")
 

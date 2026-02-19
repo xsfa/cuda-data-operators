@@ -12,16 +12,16 @@ __global__ void predicate_sum_kernel(
     const int* __restrict__ region_ids,
     int target_region,
     int n,
-    long long* __restrict__ result
+    unsigned long long* __restrict__ result
 ) {
-    __shared__ long long sdata[BLOCK_SIZE];
+    __shared__ unsigned long long sdata[BLOCK_SIZE];
 
     int tid = threadIdx.x;
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
     // Grid-stride loop: each thread accumulates multiple elements
-    long long thread_sum = 0;
+    unsigned long long thread_sum = 0;
     for (int i = gid; i < n; i += stride) {
         if (region_ids[i] == target_region) {
             thread_sum += values[i];
@@ -55,9 +55,9 @@ extern "C" long long predicate_sum(
     int target_region,
     int n
 ) {
-    long long* d_result;
-    cudaMalloc(&d_result, sizeof(long long));
-    cudaMemset(d_result, 0, sizeof(long long));
+    unsigned long long* d_result;
+    cudaMalloc(&d_result, sizeof(unsigned long long));
+    cudaMemset(d_result, 0, sizeof(unsigned long long));
 
     int num_blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
     num_blocks = min(num_blocks, 256);  // cap blocks to avoid excessive atomics
@@ -66,11 +66,11 @@ extern "C" long long predicate_sum(
         d_values, d_region_ids, target_region, n, d_result
     );
 
-    long long result;
-    cudaMemcpy(&result, d_result, sizeof(long long), cudaMemcpyDeviceToHost);
+    unsigned long long result;
+    cudaMemcpy(&result, d_result, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
     cudaFree(d_result);
 
-    return result;
+    return static_cast<long long>(result);
 }
 
 // Example usage

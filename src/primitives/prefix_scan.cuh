@@ -132,11 +132,14 @@ __global__ void scan_phase3_kernel(
 
 /**
  * Host function: exclusive prefix sum on GPU array.
+ * Supports arbitrary array sizes via iterative hierarchical scan.
  *
  * @param input  Device pointer to input array
  * @param output Device pointer to output array (can be same as input)
  * @param n      Number of elements
- * @param temp   Temporary storage for block sums (caller provides, size = ceil(n/256))
+ * @param temp   Temporary storage (caller provides, size >= 2 * ceil(n/256))
+ *
+ * Max supported: 256^3 = 16M elements (3 levels). Extend levels[] for more.
  */
 inline void exclusive_scan(
     const uint32_t* input,
@@ -146,22 +149,70 @@ inline void exclusive_scan(
 ) {
     if (n == 0) return;
 
+    constexpr int MAX_LEVELS = 4;  // Supports up to 256^4 = 4B elements
+
     int num_blocks = (n + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
 
-    // Phase 1: per-block scan
+    // Phase 1: per-block scan of input
     scan_phase1_kernel<<<num_blocks, SCAN_BLOCK_SIZE>>>(
         input, output, temp_block_sums, n
     );
 
-    // Phase 2: scan block sums (single block, assumes num_blocks <= 256)
-    if (num_blocks > 1) {
-        scan_phase2_kernel<<<1, SCAN_BLOCK_SIZE>>>(temp_block_sums, num_blocks);
+    if (num_blocks == 1) {
+        cudaDeviceSynchronize();
+        return;
+    }
 
-        // Phase 3: add block offsets
-        scan_phase3_kernel<<<num_blocks, SCAN_BLOCK_SIZE>>>(
-            output, temp_block_sums, n
+    // Build hierarchy: track block counts and temp offsets at each level
+    int level_blocks[MAX_LEVELS];
+    uint32_t* level_data[MAX_LEVELS];
+    int num_levels = 0;
+
+    level_blocks[0] = num_blocks;
+    level_data[0] = temp_block_sums;
+    num_levels = 1;
+
+    // Compute hierarchy levels (iterative, bounded by MAX_LEVELS)
+    uint32_t* temp_ptr = temp_block_sums + num_blocks;
+    int blocks_at_level = num_blocks;
+
+    while (blocks_at_level > SCAN_BLOCK_SIZE && num_levels < MAX_LEVELS) {
+        int next_blocks = (blocks_at_level + SCAN_BLOCK_SIZE - 1) / SCAN_BLOCK_SIZE;
+
+        // Scan this level's block sums into themselves, producing next level sums
+        scan_phase1_kernel<<<next_blocks, SCAN_BLOCK_SIZE>>>(
+            level_data[num_levels - 1],
+            level_data[num_levels - 1],
+            temp_ptr,
+            blocks_at_level
+        );
+
+        level_blocks[num_levels] = next_blocks;
+        level_data[num_levels] = temp_ptr;
+        num_levels++;
+
+        temp_ptr += next_blocks;
+        blocks_at_level = next_blocks;
+    }
+
+    // Scan the top level (fits in one block)
+    if (blocks_at_level > 1) {
+        scan_phase2_kernel<<<1, SCAN_BLOCK_SIZE>>>(level_data[num_levels - 1], blocks_at_level);
+    }
+
+    // Propagate down: add each level's scanned sums to the level below
+    for (int lvl = num_levels - 1; lvl > 0; lvl--) {
+        scan_phase3_kernel<<<level_blocks[lvl], SCAN_BLOCK_SIZE>>>(
+            level_data[lvl - 1],
+            level_data[lvl],
+            level_blocks[lvl - 1]
         );
     }
+
+    // Final phase: add level 0 block sums to output
+    scan_phase3_kernel<<<num_blocks, SCAN_BLOCK_SIZE>>>(
+        output, temp_block_sums, n
+    );
 
     cudaDeviceSynchronize();
 }

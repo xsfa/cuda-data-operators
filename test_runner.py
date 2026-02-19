@@ -251,7 +251,9 @@ def test_filter_large():
     d_output = cp.zeros(n, dtype=cp.int32)
     d_mask = cp.zeros(n, dtype=cp.uint32)
     d_scan = cp.zeros(n, dtype=cp.uint32)
-    d_temp = cp.zeros(1024, dtype=cp.uint32)
+    # Need ~2x ceil(n/256) for hierarchical scan temp storage
+    temp_size = 2 * ((n + 255) // 256) + 256
+    d_temp = cp.zeros(temp_size, dtype=cp.uint32)
 
     count = lib.filter_int32(
         d_input.data.ptr,

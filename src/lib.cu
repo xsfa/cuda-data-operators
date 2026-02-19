@@ -142,4 +142,70 @@ uint64_t agg_count(int n) {
     return result;
 }
 
+// --- Timing utilities ---
+
+struct TimingResult {
+    float kernel_ms;
+    uint32_t result;
+};
+
+TimingResult filter_int32_timed(
+    const int32_t* input,
+    int n,
+    int32_t value,
+    int op,
+    int32_t* output,
+    uint32_t* temp_mask,
+    uint32_t* temp_scan,
+    uint32_t* temp_block_sums
+) {
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+
+    Column in_col{const_cast<int32_t*>(input), static_cast<size_t>(n), DataType::INT32, nullptr, nullptr};
+    Column out_col{output, static_cast<size_t>(n), DataType::INT32, nullptr, nullptr};
+    uint32_t count = filter_column<int32_t>(in_col, value, static_cast<CompareOp>(op), out_col, temp_mask, temp_scan, temp_block_sums);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float ms = 0;
+    cudaEventElapsedTime(&ms, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    return {ms, count};
+}
+
+float agg_sum_int32_timed(const int32_t* input, int n, int64_t* out_result) {
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    int64_t* d_result;
+    cudaMalloc(&d_result, sizeof(int64_t));
+
+    cudaEventRecord(start);
+
+    Column col{const_cast<int32_t*>(input), static_cast<size_t>(n), DataType::INT32, nullptr, nullptr};
+    int64_t result = sum_column<int32_t, int64_t>(col, d_result);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float ms = 0;
+    cudaEventElapsedTime(&ms, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    cudaFree(d_result);
+
+    *out_result = result;
+    return ms;
+}
+
 }  // extern "C"

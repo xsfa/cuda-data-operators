@@ -54,10 +54,3 @@ python test_runner.py --list
 python test_runner.py --test filter
 python test_runner.py --test sum_large
 ```
-
-## Benchmarking vs cuDF
-
-```bash
-bash colab_setup.sh
-python benchmark.py
-```

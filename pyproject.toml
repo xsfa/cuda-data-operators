@@ -14,7 +14,6 @@ gpu = [
 ]
 bench = [
     "cupy-cuda12x>=12.0.0; sys_platform == 'linux'",
-    "cudf-cu12>=24.0.0; sys_platform == 'linux'",
 ]
 dev = [
     "ruff>=0.4.0",

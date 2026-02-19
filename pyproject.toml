@@ -2,7 +2,7 @@
 name = "cuda-data-operators"
 version = "0.1.0"
 description = "GPU-native data operators for SQL-like operations"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "numpy>=1.24.0",
 ]

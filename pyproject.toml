@@ -8,12 +8,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# GPU deps only work on Linux x86_64/aarch64 with NVIDIA GPU + Python <=3.13
 gpu = [
-    "cupy-cuda12x>=12.0.0",
+    "cupy-cuda12x>=12.0.0; sys_platform == 'linux'",
 ]
 bench = [
-    "cupy-cuda12x>=12.0.0",
-    "cudf-cu12>=24.0.0",
+    "cupy-cuda12x>=12.0.0; sys_platform == 'linux'",
+    "cudf-cu12>=24.0.0; sys_platform == 'linux'",
 ]
 dev = [
     "ruff>=0.4.0",

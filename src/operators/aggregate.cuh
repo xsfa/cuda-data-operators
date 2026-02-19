@@ -23,6 +23,50 @@ enum class AggOp : uint8_t {
 };
 
 // =============================================================================
+// Atomic add helper (CUDA lacks atomicAdd for signed 64-bit)
+// =============================================================================
+
+template<typename T>
+__device__ inline void atomicAddAny(T* addr, T val);
+
+template<>
+__device__ inline void atomicAddAny<int>(int* addr, int val) {
+    atomicAdd(addr, val);
+}
+
+template<>
+__device__ inline void atomicAddAny<unsigned int>(unsigned int* addr, unsigned int val) {
+    atomicAdd(addr, val);
+}
+
+template<>
+__device__ inline void atomicAddAny<unsigned long long>(unsigned long long* addr, unsigned long long val) {
+    atomicAdd(addr, val);
+}
+
+template<>
+__device__ inline void atomicAddAny<long long>(long long* addr, long long val) {
+    atomicAdd(reinterpret_cast<unsigned long long*>(addr),
+              static_cast<unsigned long long>(val));
+}
+
+template<>
+__device__ inline void atomicAddAny<int64_t>(int64_t* addr, int64_t val) {
+    atomicAdd(reinterpret_cast<unsigned long long*>(addr),
+              static_cast<unsigned long long>(val));
+}
+
+template<>
+__device__ inline void atomicAddAny<float>(float* addr, float val) {
+    atomicAdd(addr, val);
+}
+
+template<>
+__device__ inline void atomicAddAny<double>(double* addr, double val) {
+    atomicAdd(addr, val);
+}
+
+// =============================================================================
 // SUM
 // =============================================================================
 
@@ -56,7 +100,7 @@ __global__ void sum_kernel(
     }
 
     if (tid == 0) {
-        atomicAdd(block_results, sdata[0]);
+        atomicAddAny(block_results, sdata[0]);
     }
 }
 

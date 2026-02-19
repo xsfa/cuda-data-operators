@@ -3,6 +3,9 @@
 
 set -e
 
+# Add CUDA to PATH (Colab has CUDA but nvcc isn't in PATH by default)
+export PATH="/usr/local/cuda/bin:$PATH"
+
 # Install RAPIDS (cuDF + CuPy)
 pip install --quiet cudf-cu12 cupy-cuda12x --extra-index-url=https://pypi.nvidia.com
 

@@ -26,6 +26,15 @@ enum class AggOp : uint8_t {
 // Atomic add helper (CUDA lacks atomicAdd for signed 64-bit)
 // =============================================================================
 
+// Device-compatible bit_cast (std::bit_cast is host-only without --expt-relaxed-constexpr)
+template<typename To, typename From>
+__device__ __host__ inline To bit_cast(From val) {
+    static_assert(sizeof(To) == sizeof(From), "bit_cast requires same size types");
+    To result;
+    memcpy(&result, &val, sizeof(To));
+    return result;
+}
+
 template<typename T>
 __device__ inline void atomicAddAny(T* addr, T val);
 
@@ -46,14 +55,12 @@ __device__ inline void atomicAddAny<unsigned long long>(unsigned long long* addr
 
 template<>
 __device__ inline void atomicAddAny<long long>(long long* addr, long long val) {
-    atomicAdd(reinterpret_cast<unsigned long long*>(addr),
-              static_cast<unsigned long long>(val));
+    atomicAdd(bit_cast<unsigned long long*>(addr), bit_cast<unsigned long long>(val));
 }
 
 template<>
 __device__ inline void atomicAddAny<int64_t>(int64_t* addr, int64_t val) {
-    atomicAdd(reinterpret_cast<unsigned long long*>(addr),
-              static_cast<unsigned long long>(val));
+    atomicAdd(bit_cast<unsigned long long*>(addr), bit_cast<unsigned long long>(val));
 }
 
 template<>

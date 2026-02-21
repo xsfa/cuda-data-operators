@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+from dataops import DataOps
+
 ops = None
 
 
@@ -76,10 +78,9 @@ def setup():
     print("=" * 60)
 
 
-def load_ops():
+def load_ops() -> DataOps:
     """Load the DataOps wrapper."""
     global ops
-    from dataops import DataOps
 
     ops = DataOps()
     return ops
@@ -90,7 +91,7 @@ def load_ops():
 # =============================================================================
 
 try:
-    import cupy as cp
+    import cupy as cp  # type: ignore
 
     HAS_CUPY = True
 except ImportError:

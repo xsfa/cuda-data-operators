@@ -16,12 +16,15 @@ from pathlib import Path
 class DataOps:
     """Wrapper for libdataops.so CUDA operators."""
 
-    def __init__(self, lib_path: str = "./libdataops.so"):
-        path = Path(lib_path).resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"{lib_path} not found. Run: python test_runner.py --setup")
+    def __init__(self, lib_path: str | None = None):
+        if lib_path is None:
+            path = Path(__file__).parent / "libdataops.so"
+        else:
+            path = Path(lib_path)
+        path = path.resolve()
 
-        print(f"Loading library from {str(path)}")
+        if not path.exists():
+            raise FileNotFoundError(f"{path} not found. Run: python test_runner.py --setup")
 
         self._lib = ctypes.CDLL(str(path))
         self._setup_signatures()

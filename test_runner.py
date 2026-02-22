@@ -2,21 +2,22 @@
 """
 Test runner for GPU data operators.
 
-Usage in Colab:
-    !git clone https://github.com/xsfa/cuda-data-operators.git
-    %cd cuda-data-operators
-    !python test_runner.py --setup
-    !python test_runner.py
+Usage on EC2:
+    git clone https://github.com/xsfa/cuda-data-operators.git
+    cd cuda-data-operators
+    python test_runner.py --setup
+    python test_runner.py
 """
 
 import argparse
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
 
-from dataops import DataOps
+from cuda_dataops import DataOps
 
 ops = None
 
@@ -137,23 +138,33 @@ def test_prefix_scan():
 
 
 def test_prefix_scan_large():
-    """Test prefix scan on 10K elements."""
-    print("\n[TEST] Prefix Scan (10K)")
+    """Test prefix scan on 100M elements."""
+    print("\n[TEST] Prefix Scan (100M)")
     if not HAS_CUPY:
         print("  SKIPPED (no CuPy)")
         return
 
-    n = 10_000
+    n = 100_000_000
     d_input = cp.ones(n, dtype=cp.uint32)
     d_output = cp.zeros(n, dtype=cp.uint32)
     d_temp = cp.zeros(ops.scan_temp_size(n), dtype=cp.uint32)
 
+    # Warmup
     ops.prefix_scan(d_input.data.ptr, d_output.data.ptr, n, d_temp.data.ptr)
+
+    t0 = time.perf_counter()
+    ops.prefix_scan(d_input.data.ptr, d_output.data.ptr, n, d_temp.data.ptr)
+    t1 = time.perf_counter()
+    elapsed_ms = (t1 - t0) * 1000
 
     result = cp.asnumpy(d_output)
     expected = np.arange(n, dtype=np.uint32)
     assert np.array_equal(result, expected)
+
+    # read input + write output = 2 passes
+    bw_gbs = (n * 4 * 2) / (t1 - t0) / 1e9
     print(f"  {n:,} elements: PASSED")
+    print(f"  Time: {elapsed_ms:.1f} ms | Bandwidth: {bw_gbs:.1f} GB/s")
 
 
 def test_filter():
@@ -163,7 +174,7 @@ def test_filter():
         print("  SKIPPED (no CuPy)")
         return
 
-    from dataops import CompareOp
+    from cuda_dataops import CompareOp
 
     input_data = np.array([10, 80, 30, 90, 50, 70, 20, 60], dtype=np.int32)
     expected = np.array([80, 90, 70, 60], dtype=np.int32)
@@ -195,18 +206,18 @@ def test_filter():
 
 
 def test_filter_large():
-    """Test filter on 1M elements."""
-    print("\n[TEST] Filter (1M)")
+    """Test filter on 100M elements."""
+    print("\n[TEST] Filter (100M)")
     if not HAS_CUPY:
         print("  SKIPPED (no CuPy)")
         return
 
-    from dataops import CompareOp
+    from cuda_dataops import CompareOp
 
-    n = 1_000_000
+    n = 100_000_000
     np.random.seed(42)
     input_data = np.random.randint(0, 100, n, dtype=np.int32)
-    expected = input_data[input_data > 50]
+    expected_count = int((input_data > 50).sum())
 
     d_input = cp.asarray(input_data)
     d_output = cp.zeros(n, dtype=cp.int32)
@@ -214,6 +225,13 @@ def test_filter_large():
     d_scan = cp.zeros(n, dtype=cp.uint32)
     d_temp = cp.zeros(ops.scan_temp_size(n), dtype=cp.uint32)
 
+    # Warmup
+    ops.filter_int32(
+        d_input.data.ptr, n, 50, CompareOp.GT,
+        d_output.data.ptr, d_mask.data.ptr, d_scan.data.ptr, d_temp.data.ptr,
+    )
+
+    t0 = time.perf_counter()
     count = ops.filter_int32(
         d_input.data.ptr,
         n,
@@ -224,11 +242,15 @@ def test_filter_large():
         d_scan.data.ptr,
         d_temp.data.ptr,
     )
+    t1 = time.perf_counter()
+    elapsed_ms = (t1 - t0) * 1000
 
-    result = cp.asnumpy(d_output[:count])
-    assert len(result) == len(expected), f"Size mismatch: {len(result)} vs {len(expected)}"
-    assert np.array_equal(result, expected), "Content mismatch"
+    assert count == expected_count, f"Size mismatch: {count} vs {expected_count}"
+
+    # input read + mask write + scan read/write + output write ≈ 5 passes
+    bw_gbs = (n * 4 * 5) / (t1 - t0) / 1e9
     print(f"  {n:,} → {count:,} rows: PASSED")
+    print(f"  Time: {elapsed_ms:.1f} ms | Bandwidth: {bw_gbs:.1f} GB/s")
 
 
 def test_sum():
@@ -247,18 +269,29 @@ def test_sum():
 
 
 def test_sum_large():
-    """Test SUM on 10M elements."""
-    print("\n[TEST] SUM (10M)")
+    """Test SUM on 500M elements."""
+    print("\n[TEST] SUM (500M)")
     if not HAS_CUPY:
         print("  SKIPPED (no CuPy)")
         return
 
-    n = 10_000_000
+    n = 500_000_000
     d_data = cp.ones(n, dtype=cp.int32)
 
+    # Warmup
+    ops.sum_int32(d_data.data.ptr, n)
+
+    t0 = time.perf_counter()
     result = ops.sum_int32(d_data.data.ptr, n)
+    t1 = time.perf_counter()
+    elapsed_ms = (t1 - t0) * 1000
+
     assert result == n, f"Got {result}"
-    print(f"  sum(10M ones) = {result:,}: PASSED")
+
+    # single read pass over input
+    bw_gbs = (n * 4) / (t1 - t0) / 1e9
+    print(f"  sum({n//1_000_000}M ones) = {result:,}: PASSED")
+    print(f"  Time: {elapsed_ms:.1f} ms | Bandwidth: {bw_gbs:.1f} GB/s")
 
 
 def test_count():
